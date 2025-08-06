@@ -1,14 +1,25 @@
 // server.js
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // Ya está importado, ¡excelente!
 const { sequelize, Order, Product, Supplier, OrderProduct } = require('./models');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000; // Usará 8080 si está en .env, si no, usará 5000
 
 // --- Middlewares ---
-app.use(cors());
+
+// Configuración de CORS
+// Esto permite que tu frontend local (http://localhost:5173) se comunique con tu backend desplegado.
+const corsOptions = {
+  origin: 'http://localhost:5173', // Permite solicitudes solo desde esta URL
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'], // Métodos HTTP permitidos
+  credentials: true, // Permite el envío de cookies o cabeceras de autorización
+  optionsSuccessStatus: 204 // Código de estado para solicitudes preflight exitosas (OPTIONS)
+};
+app.use(cors(corsOptions)); // Aplica la configuración de CORS
+
+// Middleware para parsear el cuerpo de las solicitudes como JSON
 app.use(express.json());
 
 // --- Database Connection Check ---
@@ -22,6 +33,7 @@ sequelize.authenticate()
 
 // --- API Routes ---
 
+// Ruta de bienvenida
 app.get('/', (req, res) => {
   res.status(200).send('¡Bienvenido a la API del backend de OrderFlow!');
 });
@@ -167,6 +179,36 @@ app.post('/suppliers', async (req, res) => {
     res.status(500).json({ error: 'Error al crear el proveedor' });
   }
 });
+// Ruta PUT para actualizar un proveedor (movida y corregida aquí)
+app.put('/suppliers/:id', async (req, res) => {
+  const { id } = req.params;
+  const { company_name, ruc, contact, address } = req.body;
+
+  try {
+    const supplier = await Supplier.findByPk(id);
+
+    if (!supplier) {
+      return res.status(404).json({ error: 'Proveedor no encontrado' });
+    }
+
+    // Actualizar el proveedor con los nuevos datos
+    await supplier.update({
+      company_name,
+      ruc,
+      contact,
+      address
+    });
+
+    res.status(200).json(supplier);
+
+  } catch (err) {
+    console.error('Error al actualizar proveedor:', err);
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'El RUC o el nombre de la compañía ya existen.' });
+    }
+    res.status(500).json({ error: 'Error al actualizar proveedor' });
+  }
+});
 app.delete('/suppliers/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -182,40 +224,11 @@ app.delete('/suppliers/:id', async (req, res) => {
 
 
 // --- Server Startup ---
+// Sincroniza los modelos con la base de datos y luego inicia el servidor
 sequelize.sync({ alter: false }).then(() => {
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
   });
 }).catch(err => {
   console.error('No se pudo conectar con la base de datos y levantar el servidor:', err);
-});
-
-app.put('/suppliers/:id', async (req, res) => {
-    const { id } = req.params;
-    const { company_name, ruc, contact, address } = req.body;
-    
-    try {
-        const supplier = await Supplier.findByPk(id);
-
-        if (!supplier) {
-            return res.status(404).json({ error: 'Proveedor no encontrado' });
-        }
-
-        // Actualizar el proveedor con los nuevos datos
-        await supplier.update({
-            company_name,
-            ruc,
-            contact,
-            address
-        });
-        
-        res.status(200).json(supplier);
-
-    } catch (err) {
-        console.error('Error al actualizar proveedor:', err);
-        if (err.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({ error: 'El RUC o el nombre de la compañía ya existen.' });
-        }
-        res.status(500).json({ error: 'Error al actualizar proveedor' });
-    }
 });
